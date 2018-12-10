@@ -382,6 +382,14 @@ public class AccessControlList {
       }
    }
 
+   public static class OssPermissionGrantee extends Grantee {
+      public OssPermissionGrantee(String identifier) {	
+         super(identifier);
+      	}
+      public String getPermission() {
+         return getIdentifier();
+      }
+   }
    public static class EmailAddressGrantee extends Grantee {
       public EmailAddressGrantee(String emailAddress) {
          super(emailAddress);

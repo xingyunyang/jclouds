@@ -75,7 +75,16 @@ public class BindRegionToXmlPayload extends BindToStringPayload {
          value = constraint;
       } else {
          logger.warn("region %s not in %s ", constraint, regions);
-         value = constraint;
+         value = constraint; // the original code
+         logger.info("region constraintconstraint is %s ", constraint);
+         logger.info("region value is %s ", value);
+         if (!value.startsWith("http")) {
+            String payload = String
+            .format(
+               "<CreateBucketConfiguration><LocationConstraint>%s</LocationConstraint></CreateBucketConfiguration>",
+               value);
+         request = super.bindToRequest(request, payload);
+         request.getPayload().getContentMetadata().setContentType(MediaType.TEXT_XML);
       }
       String payload = String
             .format(

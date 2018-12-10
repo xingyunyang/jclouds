@@ -64,6 +64,7 @@ import org.jclouds.Constants;
 import org.jclouds.http.HttpRequest;
 import org.jclouds.http.HttpRequestFilter;
 import org.jclouds.http.HttpUtils;
+import org.jclouds.http.Uris;
 import org.jclouds.http.Uris.UriBuilder;
 import org.jclouds.http.filters.StripExpectHeader;
 import org.jclouds.http.options.HttpRequestOptions;
@@ -99,6 +100,7 @@ import org.jclouds.rest.annotations.VirtualHost;
 import org.jclouds.rest.annotations.WrapWith;
 import org.jclouds.rest.binders.BindMapToStringPayload;
 import org.jclouds.rest.binders.BindToJsonPayloadWrappedWith;
+import org.jclouds.util.RegionHandler;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Function;
@@ -376,6 +378,31 @@ public class RestAnnotationProcessor implements Function<Invocation, HttpRequest
                Key.get(uriSupplierLiteral, org.jclouds.location.Provider.class)).get());
          if (endpoint.isPresent())
             logger.trace("using default endpoint %s for %s", endpoint, invocation);
+      }
+      if ((endpoint != null) && (endpoint.get() != null) && (endpoint.get().getHost() != null)) {
+         URI original = endpoint.get();
+         if (original.getHost().contains("amazonaws.com")) {
+         /* we recognize the csp's type(oss or aws), if original contains 'amazonaws.com' */  
+         String ossPrivateEndpint = "";
+         if (RegionHandler.CSP_REGION.startsWith("https://")) {
+            ossPrivateEndpint = RegionHandler.CSP_REGION.substring(8);
+            original = Uris.uriBuilder(original).host(ossPrivateEndpint).build();
+	   } else {
+             if (RegionHandler.CSP_REGION.startsWith("http://")) {
+                ossPrivateEndpint = RegionHandler.CSP_REGION.substring(7);
+                original = Uris.uriBuilder(original).host(ossPrivateEndpint).build();
+             } else {
+                if (RegionHandler.CSP_REGION.contains("oss-")) {
+                   original = Uris.uriBuilder(original).host(RegionHandler.CSP_REGION + ".aliyuncs.com").build();
+                }else {
+                   if (RegionHandler.CSP_REGION.contains("cn-north-1")) {
+                      original = Uris.uriBuilder(original).host("s3.cn-north-1.amazonaws.com.cn").build();
+                   }
+                 }
+              }
+            }
+        }
+         return Optional.fromNullable(original);
       }
       return endpoint;
    }

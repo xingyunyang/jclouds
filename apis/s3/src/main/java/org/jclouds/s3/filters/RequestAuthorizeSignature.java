@@ -28,12 +28,17 @@ import static org.jclouds.s3.reference.S3Constants.PROPERTY_S3_SERVICE_PATH;
 import static org.jclouds.s3.reference.S3Constants.PROPERTY_S3_VIRTUAL_HOST_BUCKETS;
 import static org.jclouds.util.Strings2.toInputStream;
 
+import java.security.InvalidKeyException;
+import java.security.NoSuchAlgorithmException;
+import java.security.cert.CertificateException;
 import java.util.Collection;
+import java.util.Date;
 import java.util.Locale;
 import java.util.Map.Entry;
 import java.util.Set;
 
 import javax.annotation.Resource;
+import javax.crypto.Mac;
 import javax.inject.Inject;
 import javax.inject.Named;
 import javax.inject.Provider;
@@ -44,6 +49,7 @@ import org.jclouds.aws.domain.SessionCredentials;
 import org.jclouds.crypto.Crypto;
 import org.jclouds.date.TimeStamp;
 import org.jclouds.domain.Credentials;
+import org.jclouds.encryption.internal.JCECrypto;
 import org.jclouds.http.HttpException;
 import org.jclouds.http.HttpRequest;
 import org.jclouds.http.HttpRequestFilter;
@@ -51,11 +57,14 @@ import org.jclouds.http.HttpUtils;
 import org.jclouds.http.internal.SignatureWire;
 import org.jclouds.logging.Logger;
 import org.jclouds.rest.RequestSigner;
+import org.jclouds.s3.filters.Aws4SignerBase.ServiceAndRegion;
+import org.jclouds.s3.filters.Aws4SignerBase.ServiceAndRegion.AWSServiceAndRegion;
 import org.jclouds.s3.util.S3Utils;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Strings;
 import com.google.common.base.Supplier;
+import com.google.common.base.Suppliers;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Multimap;
@@ -110,23 +119,80 @@ public class RequestAuthorizeSignature implements HttpRequestFilter, RequestSign
       this.utils = utils;
    }
 
+   private String dataToSign = "";
    public HttpRequest filter(HttpRequest request) throws HttpException {
-      request = replaceDateHeader(request);
-      Credentials current = creds.get();
-      if (current instanceof SessionCredentials) {
-         request = replaceSecurityTokenHeader(request, SessionCredentials.class.cast(current));
-      }
-      String signature = calculateSignature(createStringToSign(request));
-      request = replaceAuthorizationHeader(request, signature);
-      utils.logRequest(signatureLog, request, "<<");
-      return request;
-   }
+      Credentials current = this.creds.get();
+      if (current.identity.length() != RegionHandler.OSS_ACCESS_KEY_ID_LENGTH) {
+         /*handle the aws-s3 request */
+         Supplier<Date> timestampProvider = Suppliers.ofInstance(new Date(timeStampProvider.get()));
+         String userDataBlockSize = System.getProperty("user.data.block.size");
+         int sliceSize = 262144; // the dafault value for block size
+         if (userDataBlockSize != null) {
+            sliceSize  = Integer.valueOf(userDataBlockSize);
+         }
+         String endpoint = request.getEndpoint().getHost();
+         ServiceAndRegion serviceAndRegion = new AWSServiceAndRegion(endpoint);
+         Aws4SignerForAuthorizationHeader asah4 = 
+                       new Aws4SignerForAuthorizationHeader(this.signatureWire, this.isVhostStyle, this.headerTag, this.creds, timestampProvider, serviceAndRegion, this.crypto);
+         Aws4SignerForChunkedUpload ascu4 = 
+                       new Aws4SignerForChunkedUpload(this.signatureWire, this.headerTag, sliceSize, this.creds, timestampProvider, serviceAndRegion, this.crypto);
+         RequestAuthorizeSignatureV4 ras4 = 
+                       new RequestAuthorizeSignatureV4(asah4, ascu4, null);
+         request = ras4.filter(request);
+         return request;  
+      } else {
+          request = replaceDateHeader(request);
+          if (current instanceof SessionCredentials) {
+             request = replaceSecurityTokenHeader(request, SessionCredentials.class.cast(current));
+          }
+          /* solve the problem about getting the oss bucket info. */
+          if (current.identity.length() == RegionHandler.OSS_ACCESS_KEY_ID_LENGTH) {
+             if (request.getMethod().toUpperCase().equals("HEAD")) {
+                request = request.toBuilder().method("GET").build();
+             }
+          }
+          dataToSign = createStringToSign(request);
+          //output dataToSign
+          String signature = calculateSignature(dataToSign);
+          request = replaceAuthorizationHeader(request, signature);
+          utils.logRequest(signatureLog, request, "<<");
+          return request;
+       }
+    }
 
    HttpRequest replaceSecurityTokenHeader(HttpRequest request, SessionCredentials current) {
       return request.toBuilder().replaceHeader("x-amz-security-token", current.getSessionToken()).build();
    }
 
    protected HttpRequest replaceAuthorizationHeader(HttpRequest request, String signature) {
+      Credentials credentials = creds.get();
+      /* oss accesskeyid and secretaccesskey */
+      String accesskeyid = credentials.identity;
+      String secretaccesskey = credentials.credential;
+      if ((accesskeyid != null) && (accesskeyid.length() == RegionHandler.OSS_ACCESS_KEY_ID_LENGTH)) {		   
+         /**
+         * if using oss, then create the oss header  
+         */
+         Crypto crypto = null;
+         Mac mac = null;
+         try {
+            crypto = new JCECrypto();
+            mac = crypto.hmacSHA1(secretaccesskey.getBytes());
+         } catch (NoSuchAlgorithmException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+         } catch (CertificateException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+         } catch (InvalidKeyException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+         }
+         String ossSignature = base64().encode(mac.doFinal(dataToSign.getBytes()));
+         String ossAuthorization = "OSS " + accesskeyid + ":" + ossSignature;
+         request = request.toBuilder().replaceHeader(HttpHeaders.AUTHORIZATION, ossAuthorization).build();
+         return request;	   
+      }
       request = request.toBuilder()
             .replaceHeader(HttpHeaders.AUTHORIZATION, authTag + " " + creds.get().identity + ":" + signature).build();
       return request;
@@ -150,7 +216,15 @@ public class RequestAuthorizeSignature implements HttpRequestFilter, RequestSign
       if (canonicalizedHeaders.containsKey("x-" + headerTag + "-date")) {
          canonicalizedHeaders.removeAll("date");
       }
-
+      /*
+       * test provider is aws-s3 or not.
+       */
+      Credentials credentials = creds.get();
+	   /* oss accesskeyid and secretaccesskey */
+	   String accesskeyid = credentials.identity;
+      if ((accesskeyid != null) && (accesskeyid.length() != RegionHandler.OSS_ACCESS_KEY_ID_LENGTH)) {
+    	  appendAmzHeaders(canonicalizedHeaders, buffer);
+      }
       appendAmzHeaders(canonicalizedHeaders, buffer);
       appendBucketName(request, buffer);
       appendUriPath(request, buffer);

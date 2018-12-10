@@ -25,6 +25,21 @@ import static org.jclouds.aws.domain.Region.SA_EAST_1;
 import static org.jclouds.aws.domain.Region.US_STANDARD;
 import static org.jclouds.aws.domain.Region.US_WEST_1;
 import static org.jclouds.aws.domain.Region.US_WEST_2;
+import static org.jclouds.aws.domain.Region.CN_NORTH_1;
+import static org.jclouds.aws.domain.Region.OSS_CN_SHANGHAI;
+import static org.jclouds.aws.domain.Region.OSS_CN_HANGZHOU;
+import static org.jclouds.aws.domain.Region.OSS_CN_QINGDAO;
+import static org.jclouds.aws.domain.Region.OSS_CN_BEIJING;
+import static org.jclouds.aws.domain.Region.OSS_CN_ZHANGJIAKOU;
+import static org.jclouds.aws.domain.Region.OSS_CN_SHENZHEN;
+import static org.jclouds.aws.domain.Region.OSS_CN_HONGKONG;
+import static org.jclouds.aws.domain.Region.OSS_US_WEST_1;
+import static org.jclouds.aws.domain.Region.OSS_US_EAST_1;
+import static org.jclouds.aws.domain.Region.OSS_AP_SOUTHEAST_1;
+import static org.jclouds.aws.domain.Region.OSS_AP_SOUTHEAST_2;
+import static org.jclouds.aws.domain.Region.OSS_AP_NORTHEAST_1;
+import static org.jclouds.aws.domain.Region.OSS_EU_CENTRAL;
+import static org.jclouds.aws.domain.Region.OSS_ME_EAST_1;
 import static org.jclouds.location.reference.LocationConstants.ENDPOINT;
 import static org.jclouds.location.reference.LocationConstants.PROPERTY_REGION;
 
@@ -64,7 +79,7 @@ public class AWSS3ProviderMetadata extends BaseProviderMetadata {
    public static Properties defaultProperties() {
       Properties properties = new Properties();
       properties.putAll(Region.regionPropertiesS3());
-      properties.setProperty(PROPERTY_ENDPOINT, "https://s3.amazonaws.com");
+      properties.setProperty(PROPERTY_ENDPOINT, "https://oss.aliyuncs.com"); // https://s3.amazonaws.com
       properties.setProperty(PROPERTY_REGION + "." + US_STANDARD + "." + ENDPOINT, "https://s3.amazonaws.com");
       properties.setProperty(PROPERTY_REGION + "." + US_WEST_1 + "." + ENDPOINT, "https://s3-us-west-1.amazonaws.com");
       properties.setProperty(PROPERTY_REGION + "." + US_WEST_2 + "." + ENDPOINT, "https://s3-us-west-2.amazonaws.com");
@@ -76,6 +91,36 @@ public class AWSS3ProviderMetadata extends BaseProviderMetadata {
             "https://s3-ap-southeast-2.amazonaws.com");
       properties.setProperty(PROPERTY_REGION + "." + AP_NORTHEAST_1 + "." + ENDPOINT,
             "https://s3-ap-northeast-1.amazonaws.com");
+      properties.setProperty(PROPERTY_REGION + "." + CN_NORTH_1 + "." + ENDPOINT,
+    		"https://s3.cn-north-1.amazonaws.com.cn");
+      properties.setProperty(PROPERTY_REGION + "." + OSS_CN_SHANGHAI + "." + ENDPOINT,
+              "http://oss-cn-shanghai.aliyuncs.com");
+      properties.setProperty(PROPERTY_REGION + "." + OSS_CN_HANGZHOU + "." + ENDPOINT,
+              "http://oss-cn-hangzhou.aliyuncs.com");
+      properties.setProperty(PROPERTY_REGION + "." + OSS_CN_QINGDAO + "." + ENDPOINT,
+              "http://oss-cn-qingdao.aliyuncs.com");
+      properties.setProperty(PROPERTY_REGION + "." + OSS_CN_BEIJING + "." + ENDPOINT,
+              "http://oss-cn-beijing.aliyuncs.com");
+      properties.setProperty(PROPERTY_REGION + "." + OSS_CN_ZHANGJIAKOU + "." + ENDPOINT,
+              "http://oss-cn-zhangjiakou.aliyuncs.com");
+      properties.setProperty(PROPERTY_REGION + "." + OSS_CN_SHENZHEN + "." + ENDPOINT,
+              "http://oss-cn-shenzhen.aliyuncs.com");
+      properties.setProperty(PROPERTY_REGION + "." + OSS_CN_HONGKONG + "." + ENDPOINT,
+              "http://oss-cn-hongkong.aliyuncs.com");
+      properties.setProperty(PROPERTY_REGION + "." + OSS_US_WEST_1 + "." + ENDPOINT,
+              "http://oss-us-west-1.aliyuncs.com");
+      properties.setProperty(PROPERTY_REGION + "." + OSS_US_EAST_1 + "." + ENDPOINT,
+              "http://oss-us-east-1.aliyuncs.com");
+      properties.setProperty(PROPERTY_REGION + "." + OSS_AP_SOUTHEAST_1 + "." + ENDPOINT,
+              "http://oss-ap-southeast-1.aliyuncs.com");
+      properties.setProperty(PROPERTY_REGION + "." + OSS_AP_SOUTHEAST_2 + "." + ENDPOINT,
+              "http://oss-ap-southeast-2.aliyuncs.com");
+      properties.setProperty(PROPERTY_REGION + "." + OSS_AP_NORTHEAST_1 + "." + ENDPOINT,
+              "http://oss-ap-northeast-1.aliyuncs.com");
+      properties.setProperty(PROPERTY_REGION + "." + OSS_EU_CENTRAL + "." + ENDPOINT,
+              "http://oss-eu-central.aliyuncs.com");
+      properties.setProperty(PROPERTY_REGION + "." + OSS_ME_EAST_1 + "." + ENDPOINT,
+              "http://oss-me-east-1.aliyuncs.com");
       return properties;
    }
    
@@ -85,10 +130,10 @@ public class AWSS3ProviderMetadata extends BaseProviderMetadata {
          id("aws-s3")
          .name("Amazon Simple Storage Service (S3)")
          .apiMetadata(new AWSS3ApiMetadata())
-         .homepage(URI.create("http://aws.amazon.com/s3"))
+         .homepage(URI.create("http://oss-cn-shanghai.aliyuncs.com"))
          .console(URI.create("https://console.aws.amazon.com/s3/home"))
          .linkedServices("aws-ec2", "aws-elb", "aws-cloudwatch", "aws-s3", "aws-simpledb")
-         .iso3166Codes("US", "US-CA", "US-OR", "BR-SP", "IE", "SG", "AU-NSW", "JP-13")
+         .iso3166Codes("US", "US-CA", "US-OR", "BR-SP", "IE", "SG", "AU-NSW", "JP-13", "CN-11")
          .defaultProperties(AWSS3ProviderMetadata.defaultProperties());
       }
 

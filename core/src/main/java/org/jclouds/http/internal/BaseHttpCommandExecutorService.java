@@ -23,7 +23,11 @@ import static org.jclouds.http.HttpUtils.releasePayload;
 import static org.jclouds.http.HttpUtils.wirePayloadIfEnabled;
 import static org.jclouds.util.Throwables2.getFirstThrowableOfType;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.RandomAccessFile;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.Set;
 
 import javax.annotation.Resource;
@@ -92,9 +96,12 @@ public abstract class BaseHttpCommandExecutorService<Q> implements HttpCommandEx
             logger.debug("Sending request %s: %s", request.hashCode(), request.getRequestLine());
             wirePayloadIfEnabled(wire, request);
             utils.logRequest(headerLog, request, ">>");
+            logger.debug("request content: %s", request.toString());
             nativeRequest = convert(request);
             response = invoke(nativeRequest);
 
+            logger.debug("response content: %s", response.toString());
+            logger.debug("Receiving response %s: %s", response.getHeaders().get("x-oss-request-id").toString(), response.toString());
             logger.debug("Receiving response %s: %s", request.hashCode(), response.getStatusLine());
             utils.logResponse(headerLog, response, "<<");
             if (response.getPayload() != null && wire.enabled())
@@ -160,5 +167,47 @@ public abstract class BaseHttpCommandExecutorService<Q> implements HttpCommandEx
    protected abstract HttpResponse invoke(Q nativeRequest) throws IOException, InterruptedException;
 
    protected abstract void cleanup(Q nativeRequest);
+   /**
+   * append the content to the file
+   */
+   public static void appendFile(String content, String className){	
+      String fileName = "/dumps/cloud/jcloud.trace";
+      String osType = System.getProperty("os.name");
+      if (osType.toLowerCase().contains("windows")) {
+         fileName = "E://jcloud.trace";
+      }
+      RandomAccessFile raf = null;
+      try {
+         content = getTimestamp() + "  " + className + "  " + content + "\r\n";
+         raf = new RandomAccessFile(fileName, "rw");
+         raf.seek(raf.length());
+         String temp = new String(content.getBytes());
+         raf.writeBytes(temp);
+       } catch (FileNotFoundException e) {
+       // TODO Auto-generated catch block
+       e.printStackTrace();
+       } catch (IOException e) {
+       // TODO Auto-generated catch block
+       e.printStackTrace();
+       } finally {
+            try {
+            raf.close();
+            } catch (IOException e) {
+               // TODO Auto-generated catch block
+               e.printStackTrace();
+            }
+       }
+   }
+   /**
+    * get the timestamp
+    * @return time
+   */
+   private static String getTimestamp(){
+      Date currentTime = new Date(System.currentTimeMillis());
+      SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+      return sdf.format(currentTime);
+    }
+}
+
 
 }

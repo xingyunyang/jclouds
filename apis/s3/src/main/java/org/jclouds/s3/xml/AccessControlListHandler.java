@@ -24,9 +24,11 @@ import org.jclouds.http.functions.ParseSax;
 import org.jclouds.s3.domain.AccessControlList;
 import org.jclouds.s3.domain.AccessControlList.CanonicalUserGrantee;
 import org.jclouds.s3.domain.AccessControlList.EmailAddressGrantee;
+import org.jclouds.s3.domain.AccessControlList.OssPermissionGrantee;
 import org.jclouds.s3.domain.AccessControlList.Grantee;
 import org.jclouds.s3.domain.AccessControlList.GroupGrantee;
 import org.jclouds.s3.domain.CanonicalUser;
+import org.jclouds.util.RegionHandler;
 import org.xml.sax.Attributes;
 
 /**
@@ -71,6 +73,10 @@ public class AccessControlListHandler extends ParseSax.HandlerWithResult<AccessC
             currentGrantee = new GroupGrantee(URI.create(currentId));
          }
       } else if (qName.equals("Grant")) {
+         if (RegionHandler.CSP_REGION.isEmpty() || RegionHandler.CSP_REGION.contains("oss")) {
+            currentPermission = currentOrNull(currentText);
+            currentGrantee = new OssPermissionGrantee(acl.getOwner().getId());
+         }
          acl.addPermission(currentGrantee, currentPermission);
       }
 

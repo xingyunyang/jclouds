@@ -108,7 +108,8 @@ public class ListBucketHandler extends ParseSax.HandlerWithResult<ListBucketResp
          builder.owner(currentOwner);
          currentOwner = null;
       } else if (qName.equals("StorageClass")) {
-         builder.storageClass(ObjectMetadata.StorageClass.valueOf(currentOrNull(currentText)));
+         /*toUpperCase is added for oss, aws-s3 is uppercase, but oss is lowcase */
+         builder.storageClass(ObjectMetadata.StorageClass.valueOf(currentOrNull(currentText).toUpperCase()));
       } else if (qName.equals("Contents")) {
          contents.add(builder.build());
          builder = new ObjectMetadataBuilder().bucket(bucketName);
