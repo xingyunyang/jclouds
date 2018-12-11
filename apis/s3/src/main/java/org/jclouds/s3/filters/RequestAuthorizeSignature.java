@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.jclouds.s3.filters;
 
 import static com.google.common.base.Charsets.UTF_8;
@@ -60,6 +61,7 @@ import org.jclouds.rest.RequestSigner;
 import org.jclouds.s3.filters.Aws4SignerBase.ServiceAndRegion;
 import org.jclouds.s3.filters.Aws4SignerBase.ServiceAndRegion.AWSServiceAndRegion;
 import org.jclouds.s3.util.S3Utils;
+import org.jclouds.util.RegionHandler;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Strings;
@@ -101,7 +103,7 @@ public class RequestAuthorizeSignature implements HttpRequestFilter, RequestSign
    private final String headerTag;
    private final String servicePath;
    private final boolean isVhostStyle;
-
+   
    @Inject
    public RequestAuthorizeSignature(SignatureWire signatureWire, @Named(PROPERTY_AUTH_TAG) String authTag,
             @Named(PROPERTY_S3_VIRTUAL_HOST_BUCKETS) boolean isVhostStyle,
@@ -118,81 +120,106 @@ public class RequestAuthorizeSignature implements HttpRequestFilter, RequestSign
       this.crypto = crypto;
       this.utils = utils;
    }
-
+   
    private String dataToSign = "";
    public HttpRequest filter(HttpRequest request) throws HttpException {
-      Credentials current = this.creds.get();
-      if (current.identity.length() != RegionHandler.OSS_ACCESS_KEY_ID_LENGTH) {
-         /*handle the aws-s3 request */
-         Supplier<Date> timestampProvider = Suppliers.ofInstance(new Date(timeStampProvider.get()));
-         String userDataBlockSize = System.getProperty("user.data.block.size");
-         int sliceSize = 262144; // the dafault value for block size
-         if (userDataBlockSize != null) {
-            sliceSize  = Integer.valueOf(userDataBlockSize);
-         }
-         String endpoint = request.getEndpoint().getHost();
-         ServiceAndRegion serviceAndRegion = new AWSServiceAndRegion(endpoint);
-         Aws4SignerForAuthorizationHeader asah4 = 
-                       new Aws4SignerForAuthorizationHeader(this.signatureWire, this.isVhostStyle, this.headerTag, this.creds, timestampProvider, serviceAndRegion, this.crypto);
-         Aws4SignerForChunkedUpload ascu4 = 
-                       new Aws4SignerForChunkedUpload(this.signatureWire, this.headerTag, sliceSize, this.creds, timestampProvider, serviceAndRegion, this.crypto);
-         RequestAuthorizeSignatureV4 ras4 = 
-                       new RequestAuthorizeSignatureV4(asah4, ascu4, null);
-         request = ras4.filter(request);
-         return request;  
-      } else {
-          request = replaceDateHeader(request);
-          if (current instanceof SessionCredentials) {
-             request = replaceSecurityTokenHeader(request, SessionCredentials.class.cast(current));
-          }
-          /* solve the problem about getting the oss bucket info. */
-          if (current.identity.length() == RegionHandler.OSS_ACCESS_KEY_ID_LENGTH) {
-             if (request.getMethod().toUpperCase().equals("HEAD")) {
-                request = request.toBuilder().method("GET").build();
-             }
-          }
-          dataToSign = createStringToSign(request);
-          //output dataToSign
-          String signature = calculateSignature(dataToSign);
-          request = replaceAuthorizationHeader(request, signature);
-          utils.logRequest(signatureLog, request, "<<");
-          return request;
-       }
-    }
+	   Credentials current = this.creds.get();
+	   if (current.identity.length() != RegionHandler.OSS_ACCESS_KEY_ID_LENGTH) {
+		   /* handle the aws-s3 request */
+		   Supplier<Date> timestampProvider = Suppliers.ofInstance(new Date(timeStampProvider.get()));
+		   String userDataBlockSize = System.getProperty("user.data.block.size");
+		   int sliceSize = 262144; // the dafault value for block size
+		   if (userDataBlockSize != null) {
+			   sliceSize  = Integer.valueOf(userDataBlockSize);
+		   }
+		   String endpoint = request.getEndpoint().getHost();
+		   ServiceAndRegion serviceAndRegion = new AWSServiceAndRegion(endpoint);
+		   Aws4SignerForAuthorizationHeader asah4 = 
+				   new Aws4SignerForAuthorizationHeader(this.signatureWire, this.isVhostStyle, this.headerTag, this.creds, timestampProvider, serviceAndRegion, this.crypto);
+		   Aws4SignerForChunkedUpload ascu4 = 
+				   new Aws4SignerForChunkedUpload(this.signatureWire, this.headerTag, sliceSize, this.creds, timestampProvider, serviceAndRegion, this.crypto);
+		   RequestAuthorizeSignatureV4 ras4 = 
+				   new RequestAuthorizeSignatureV4(asah4, ascu4, null);
+		   request = ras4.filter(request);
+		   return request;
+		  
+	   } else {
+		   request = replaceDateHeader(request);
+		   if (current instanceof SessionCredentials) {
+	         request = replaceSecurityTokenHeader(request, SessionCredentials.class.cast(current));
+		   }
+		   /* solve the problem about getting the oss bucket info. */
+		   if (current.identity.length() == RegionHandler.OSS_ACCESS_KEY_ID_LENGTH) {
+			   if (request.getMethod().toUpperCase().equals("HEAD")) {
+				   request = request.toBuilder().method("GET").build();
+			   }
+		   }
+		   dataToSign = createStringToSign(request);
+		   //output dataToSign
+//		   System.out.println("the request content is \n" + dataToSign);
+		   String signature = calculateSignature(dataToSign);
+		   request = replaceAuthorizationHeader(request, signature);
+		   utils.logRequest(signatureLog, request, "<<");
+		   return request;
+	   }
+   }
 
    HttpRequest replaceSecurityTokenHeader(HttpRequest request, SessionCredentials current) {
       return request.toBuilder().replaceHeader("x-amz-security-token", current.getSessionToken()).build();
    }
 
    protected HttpRequest replaceAuthorizationHeader(HttpRequest request, String signature) {
-      Credentials credentials = creds.get();
-      /* oss accesskeyid and secretaccesskey */
-      String accesskeyid = credentials.identity;
-      String secretaccesskey = credentials.credential;
-      if ((accesskeyid != null) && (accesskeyid.length() == RegionHandler.OSS_ACCESS_KEY_ID_LENGTH)) {		   
-         /**
-         * if using oss, then create the oss header  
-         */
-         Crypto crypto = null;
-         Mac mac = null;
-         try {
-            crypto = new JCECrypto();
-            mac = crypto.hmacSHA1(secretaccesskey.getBytes());
-         } catch (NoSuchAlgorithmException e) {
-            // TODO Auto-generated catch block
-            e.printStackTrace();
-         } catch (CertificateException e) {
-            // TODO Auto-generated catch block
-            e.printStackTrace();
-         } catch (InvalidKeyException e) {
-            // TODO Auto-generated catch block
-            e.printStackTrace();
-         }
-         String ossSignature = base64().encode(mac.doFinal(dataToSign.getBytes()));
-         String ossAuthorization = "OSS " + accesskeyid + ":" + ossSignature;
-         request = request.toBuilder().replaceHeader(HttpHeaders.AUTHORIZATION, ossAuthorization).build();
-         return request;	   
-      }
+	   
+	   Credentials credentials = creds.get();
+	   /* oss accesskeyid and secretaccesskey */
+	   String accesskeyid = credentials.identity;
+	   String secretaccesskey = credentials.credential;
+	   if ((accesskeyid != null) && (accesskeyid.length() == RegionHandler.OSS_ACCESS_KEY_ID_LENGTH)) {
+		   
+		   /**
+	        * if using oss, then create the oss header  
+	        */
+		   Crypto crypto = null;
+		   Mac mac = null;
+		   try {
+			   crypto = new JCECrypto();
+			   mac = crypto.hmacSHA1(secretaccesskey.getBytes());
+		   } catch (NoSuchAlgorithmException e) {
+			   // TODO Auto-generated catch block
+			   e.printStackTrace();
+		   } catch (CertificateException e) {
+			   // TODO Auto-generated catch block
+			   e.printStackTrace();
+		   } catch (InvalidKeyException e) {
+			   // TODO Auto-generated catch block
+			   e.printStackTrace();
+		   }
+		   String ossSignature = base64().encode(mac.doFinal(dataToSign.getBytes()));
+		   String ossAuthorization = "OSS " + accesskeyid + ":" + ossSignature;
+		   request = request.toBuilder().replaceHeader(HttpHeaders.AUTHORIZATION, ossAuthorization).build();
+		   
+		   /* add md5 header for oss*/
+//		   Payload payLoad = request.getPayload();
+//		   if (payLoad != null) {
+//				try {
+//					BufferedReader br = new BufferedReader(new InputStreamReader(payLoad.openStream()));
+//					StringBuilder sb = new StringBuilder();
+//					String temp = null;
+//					while ((temp = br.readLine()) != null) {
+//						sb.append(temp);
+//					}
+//					byte[] md5 = OSSUtil.calculateMd5(sb.toString().getBytes());
+//				    String md5Base64 = OSSUtil.toBase64String(md5);
+//				    System.out.println("******md5: " + md5Base64);
+//				    request = request.toBuilder().replaceHeader(HttpHeaders.CONTENT_MD5, md5Base64).build();
+//				} catch (IOException e) {
+//					// TODO Auto-generated catch block
+//					e.printStackTrace();
+//				}
+//		   }
+		   return request;
+		   
+	  }
       request = request.toBuilder()
             .replaceHeader(HttpHeaders.AUTHORIZATION, authTag + " " + creds.get().identity + ":" + signature).build();
       return request;
@@ -225,7 +252,8 @@ public class RequestAuthorizeSignature implements HttpRequestFilter, RequestSign
       if ((accesskeyid != null) && (accesskeyid.length() != RegionHandler.OSS_ACCESS_KEY_ID_LENGTH)) {
     	  appendAmzHeaders(canonicalizedHeaders, buffer);
       }
-      appendAmzHeaders(canonicalizedHeaders, buffer);
+//      System.out.println("Request content: " + request.toString());
+//      System.out.println("Request Range: " + request.getHeaders().get("Range"));
       appendBucketName(request, buffer);
       appendUriPath(request, buffer);
       if (signatureWire.enabled())
@@ -328,5 +356,5 @@ public class RequestAuthorizeSignature implements HttpRequestFilter, RequestSign
          }
       }
    }
-
+   
 }

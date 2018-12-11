@@ -14,6 +14,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+/******************************************************************
+*
+* Change Log.
+*
+* 08-06-2017 zreal,Inspur change original's host of aws-s3 and add the oss host.
+* 30-07-2017 zreal,Inspur move the getting host code from addHostIfMissing method to findEndpoint method
+* 
+*/
 package org.jclouds.rest.internal;
 
 import static com.google.common.base.Functions.toStringFunction;
@@ -51,6 +59,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.NoSuchElementException;
 import java.util.Set;
+
 import javax.annotation.Resource;
 import javax.inject.Named;
 import javax.ws.rs.FormParam;
@@ -179,7 +188,6 @@ public class RestAnnotationProcessor implements Function<Invocation, HttpRequest
    public GeneratedHttpRequest apply(Invocation invocation) {
       checkNotNull(invocation, "invocation");
       inputParamValidator.validateMethodParametersOrThrow(invocation, getInvokableParameters(invocation.getInvokable()));
-
       Optional<URI> endpoint = Optional.absent();
       HttpRequest r = findOrNull(invocation.getArgs(), HttpRequest.class);
       if (r != null) {
@@ -379,31 +387,42 @@ public class RestAnnotationProcessor implements Function<Invocation, HttpRequest
          if (endpoint.isPresent())
             logger.trace("using default endpoint %s for %s", endpoint, invocation);
       }
+      
+      /*
+       * zreal 18-04-2017 get the correct host according to the region info for oss and aws-s3  
+       * zreal 30-07-2017 move the code from addHostIfMissing method to findEndpoint method in order to support the list operation.
+       * 
+       */
       if ((endpoint != null) && (endpoint.get() != null) && (endpoint.get().getHost() != null)) {
-         URI original = endpoint.get();
-         if (original.getHost().contains("amazonaws.com")) {
-         /* we recognize the csp's type(oss or aws), if original contains 'amazonaws.com' */  
-         String ossPrivateEndpint = "";
-         if (RegionHandler.CSP_REGION.startsWith("https://")) {
-            ossPrivateEndpint = RegionHandler.CSP_REGION.substring(8);
-            original = Uris.uriBuilder(original).host(ossPrivateEndpint).build();
-	   } else {
-             if (RegionHandler.CSP_REGION.startsWith("http://")) {
-                ossPrivateEndpint = RegionHandler.CSP_REGION.substring(7);
-                original = Uris.uriBuilder(original).host(ossPrivateEndpint).build();
-             } else {
-                if (RegionHandler.CSP_REGION.contains("oss-")) {
-                   original = Uris.uriBuilder(original).host(RegionHandler.CSP_REGION + ".aliyuncs.com").build();
-                }else {
-                   if (RegionHandler.CSP_REGION.contains("cn-north-1")) {
-                      original = Uris.uriBuilder(original).host("s3.cn-north-1.amazonaws.com.cn").build();
-                   }
-                 }
-              }
-            }
-        }
-         return Optional.fromNullable(original);
-      }
+    	  URI original = endpoint.get();
+	  	  if (original.getHost().contains("amazonaws.com")) {
+	  		/* zreal, we recognize the csp's type(oss or aws), if original contains 'amazonaws.com' */  
+				  String ossPrivateEndpint = "";
+				  if (RegionHandler.CSP_REGION.startsWith("https://")) {
+					  ossPrivateEndpint = RegionHandler.CSP_REGION.substring(8);
+					  original = Uris.uriBuilder(original)
+							  .host(ossPrivateEndpint).build();
+				  } else {
+					  if (RegionHandler.CSP_REGION.startsWith("http://")) {
+						  ossPrivateEndpint = RegionHandler.CSP_REGION.substring(7);
+						  original = Uris.uriBuilder(original)
+								  .host(ossPrivateEndpint).build();
+					  } else {
+						  if (RegionHandler.CSP_REGION.contains("oss-")) {
+		    				  original = Uris.uriBuilder(original)
+		    							.host(RegionHandler.CSP_REGION + ".aliyuncs.com").build();
+		    			  }
+		    			  else {
+		    				  if (RegionHandler.CSP_REGION.contains("cn-north-1")) {
+		    					  original = Uris.uriBuilder(original)
+		    							  .host("s3.cn-north-1.amazonaws.com.cn").build();
+		    				  }
+		    			  }
+					  }
+				  }
+	  	  }
+	  	  return Optional.fromNullable(original);
+	  }
       return endpoint;
    }
 
@@ -543,6 +562,7 @@ public class RestAnnotationProcessor implements Function<Invocation, HttpRequest
 
    protected Optional<URI> getEndpointFor(Invocation invocation) {
       URI endpoint = getEndpointInParametersOrNull(invocation, injector);
+      
       if (endpoint == null) {
          Endpoint annotation;
          if (invocation.getInvokable().isAnnotationPresent(Endpoint.class)) {

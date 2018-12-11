@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.jclouds.s3.functions;
 
 import static com.google.common.base.Preconditions.checkArgument;
@@ -58,6 +59,7 @@ public class BindRegionToXmlPayload extends BindToStringPayload {
 
    @Override
    public <R extends HttpRequest> R bindToRequest(R request, Object input) {
+	   
       String defaultRegionForEndpoint = defaultRegionForEndpointSupplier.get();
       if (defaultRegionForEndpoint == null)
          return request;
@@ -76,22 +78,18 @@ public class BindRegionToXmlPayload extends BindToStringPayload {
       } else {
          logger.warn("region %s not in %s ", constraint, regions);
          value = constraint; // the original code
-         logger.info("region constraintconstraint is %s ", constraint);
-         logger.info("region value is %s ", value);
-         if (!value.startsWith("http")) {
-            String payload = String
-            .format(
-               "<CreateBucketConfiguration><LocationConstraint>%s</LocationConstraint></CreateBucketConfiguration>",
-               value);
-         request = super.bindToRequest(request, payload);
-         request.getPayload().getContentMetadata().setContentType(MediaType.TEXT_XML);
       }
-      String payload = String
-            .format(
-                  "<CreateBucketConfiguration><LocationConstraint>%s</LocationConstraint></CreateBucketConfiguration>",
-                  value);
-      request = super.bindToRequest(request, payload);
-      request.getPayload().getContentMetadata().setContentType(MediaType.TEXT_XML);
+      /* check the region is a true region or an endpoint */
+      logger.info("region constraintconstraint is %s ", constraint);
+      logger.info("region value is %s ", value);
+      if (!value.startsWith("http")) {
+    	  String payload = String
+  	            .format(
+  	                  "<CreateBucketConfiguration><LocationConstraint>%s</LocationConstraint></CreateBucketConfiguration>",
+  	                  value);
+    	  request = super.bindToRequest(request, payload);
+    	  request.getPayload().getContentMetadata().setContentType(MediaType.TEXT_XML);
+      }
       return request;
    }
 }
